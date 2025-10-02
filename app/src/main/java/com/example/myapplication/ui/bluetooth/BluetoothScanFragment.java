@@ -22,14 +22,16 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
+import com.example.myapplication.R;
 import com.example.myapplication.databinding.FragmentBluetoothScanBinding;
 
-public class BluetoothScanFragment extends Fragment {
+public class BluetoothScanFragment extends Fragment implements BluetoothDeviceAdapter.OnDeviceActionListener {
 
     private FragmentBluetoothScanBinding binding;
     private BluetoothScanViewModel viewModel;
     private BluetoothDeviceAdapter adapter;
     private BluetoothAdapter bluetoothAdapter;
+    private BluetoothConnectionService connectionService;
     
     private static final int REQUEST_ENABLE_BT = 1;
     private static final int REQUEST_PERMISSIONS = 2;
@@ -46,6 +48,12 @@ public class BluetoothScanFragment extends Fragment {
             } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
                 viewModel.setScanningState(false);
                 updateScanButton();
+            } else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                if (device != null) {
+                    int bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE);
+                    handleBondStateChange(device, bondState);
+                }
             }
         }
     };
@@ -63,6 +71,10 @@ public class BluetoothScanFragment extends Fragment {
         viewModel = new ViewModelProvider(this).get(BluetoothScanViewModel.class);
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         
+        // Initialize connection service
+        connectionService = new BluetoothConnectionService(getContext());
+        setupConnectionService();
+        
         setupRecyclerView();
         setupObservers();
         setupClickListeners();
@@ -77,11 +89,13 @@ public class BluetoothScanFragment extends Fragment {
         IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothDevice.ACTION_FOUND);
         filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+        filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         requireContext().registerReceiver(deviceFoundReceiver, filter);
     }
     
     private void setupRecyclerView() {
         adapter = new BluetoothDeviceAdapter();
+        adapter.setOnDeviceActionListener(this);
         binding.recyclerViewDevices.setAdapter(adapter);
         binding.recyclerViewDevices.setLayoutManager(new LinearLayoutManager(getContext()));
     }
@@ -108,6 +122,52 @@ public class BluetoothScanFragment extends Fragment {
         });
         
         binding.buttonClear.setOnClickListener(v -> viewModel.clearDevices());
+    }
+    
+    private void setupConnectionService() {
+        connectionService.setConnectionListener(new BluetoothConnectionService.ConnectionListener() {
+            @Override
+            public void onConnected(BluetoothDevice device) {
+                String deviceName = "";
+                try {
+                    if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                        deviceName = device.getName() != null ? device.getName() : "Unknown Device";
+                    }
+                } catch (SecurityException e) {
+                    deviceName = "Unknown Device";
+                }
+                
+                Toast.makeText(getContext(), "Connected to " + deviceName, Toast.LENGTH_SHORT).show();
+                
+                // Update the device status in the list
+                viewModel.updateDeviceConnectionStatus(device, true);
+                
+                // Send a test message to the Python server
+                connectionService.sendMessage("Hello from Android app!");
+            }
+            
+            @Override
+            public void onDisconnected() {
+                Toast.makeText(getContext(), "Disconnected from device", Toast.LENGTH_SHORT).show();
+                // Update all devices to disconnected status
+                viewModel.updateAllDevicesDisconnected();
+            }
+            
+            @Override
+            public void onConnectionFailed(String error) {
+                Toast.makeText(getContext(), "Connection failed: " + error, Toast.LENGTH_LONG).show();
+            }
+            
+            @Override
+            public void onMessageReceived(String message) {
+                Toast.makeText(getContext(), "Received: " + message, Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onMessageSent(String message) {
+                Toast.makeText(getContext(), "Sent: " + message, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
     
     private void startScanning() {
@@ -235,6 +295,126 @@ public class BluetoothScanFragment extends Fragment {
             // Receiver not registered
         }
         
+        // Clean up connection service
+        if (connectionService != null) {
+            connectionService.destroy();
+        }
+        
         binding = null;
+    }
+    
+    @Override
+    public void onPairUnpairClick(BluetoothDeviceItem deviceItem) {
+        if (!hasRequiredPermissions()) {
+            requestPermissions();
+            return;
+        }
+        
+        BluetoothDevice device = deviceItem.getDevice();
+        if (device == null) return;
+        
+        try {
+            if (deviceItem.isPaired()) {
+                // Unpair device
+                unpairDevice(device);
+            } else {
+                // Pair device
+                pairDevice(device);
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(getContext(), getString(R.string.permission_required_pairing), Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    @Override
+    public void onConnectClick(BluetoothDeviceItem deviceItem) {
+        if (!hasRequiredPermissions()) {
+            requestPermissions();
+            return;
+        }
+        
+        BluetoothDevice device = deviceItem.getDevice();
+        if (device == null || !deviceItem.isPaired()) return;
+        
+        try {
+            if (deviceItem.isConnected()) {
+                // Disconnect from the device
+                connectionService.disconnect();
+                Toast.makeText(getContext(), "Disconnecting...", Toast.LENGTH_SHORT).show();
+            } else {
+                // Connect to the device using our connection service
+                String deviceName = "";
+                if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                    deviceName = device.getName() != null ? device.getName() : "Unknown Device";
+                }
+                Toast.makeText(getContext(), "Connecting to " + deviceName + "...", Toast.LENGTH_SHORT).show();
+                connectionService.connect(device);
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(getContext(), "Permission required for connection operations", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void pairDevice(BluetoothDevice device) {
+        try {
+            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                boolean pairingStarted = device.createBond();
+                if (pairingStarted) {
+                    String deviceName = device.getName() != null ? device.getName() : "Unknown Device";
+                    Toast.makeText(getContext(), getString(R.string.pairing_initiated, deviceName), Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(getContext(), getString(R.string.pairing_failed), Toast.LENGTH_SHORT).show();
+                }
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(getContext(), "Permission denied for pairing", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void unpairDevice(BluetoothDevice device) {
+        try {
+            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                // Use reflection to call the hidden removeBond method
+                try {
+                    device.getClass().getMethod("removeBond").invoke(device);
+                    String deviceName = device.getName() != null ? device.getName() : "Unknown Device";
+                    Toast.makeText(getContext(), getString(R.string.unpairing_initiated, deviceName), Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(getContext(), getString(R.string.unpair_failed), Toast.LENGTH_SHORT).show();
+                }
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(getContext(), "Permission denied for unpairing", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void handleBondStateChange(BluetoothDevice device, int bondState) {
+        String deviceAddress = device.getAddress();
+        boolean isPaired = (bondState == BluetoothDevice.BOND_BONDED);
+        
+        // Update the device status in the ViewModel
+        viewModel.updateDeviceStatus(deviceAddress, isPaired, false);
+        
+        // Show appropriate message
+        try {
+            String deviceName = "Unknown Device";
+            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                deviceName = device.getName() != null ? device.getName() : "Unknown Device";
+            }
+            
+            switch (bondState) {
+                case BluetoothDevice.BOND_BONDED:
+                    Toast.makeText(getContext(), "Successfully paired with " + deviceName, Toast.LENGTH_SHORT).show();
+                    break;
+                case BluetoothDevice.BOND_NONE:
+                    Toast.makeText(getContext(), "Unpaired from " + deviceName, Toast.LENGTH_SHORT).show();
+                    break;
+                case BluetoothDevice.BOND_BONDING:
+                    Toast.makeText(getContext(), "Pairing with " + deviceName + "...", Toast.LENGTH_SHORT).show();
+                    break;
+            }
+        } catch (SecurityException e) {
+            // Handle permission error
+        }
     }
 }

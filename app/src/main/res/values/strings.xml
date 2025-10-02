@@ -4,4 +4,35 @@
     <string name="title_dashboard">Dashboard</string>
     <string name="title_notifications">Notifications</string>
     <string name="title_bluetooth">Bluetooth Scanner</string>
+    
+    <!-- Bluetooth related strings -->
+    <string name="pair">Pair</string>
+    <string name="unpair">Unpair</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="pairing_initiated">Pairing initiated with %1$s</string>
+    <string name="unpairing_initiated">Unpairing initiated with %1$s</string>
+    <string name="pairing_successful">Successfully paired with %1$s</string>
+    <string name="unpaired_device">Unpaired from %1$s</string>
+    <string name="pairing_in_progress">Pairing with %1$s...</string>
+    <string name="pairing_failed">Failed to start pairing</string>
+    <string name="unpair_failed">Failed to unpair device</string>
+    <string name="permission_required_pairing">Permission required for pairing operations</string>
+    <string name="permission_required_connection">Permission required for connection operations</string>
+    <string name="connect_not_implemented">Connect functionality not implemented yet</string>
+    <string name="disconnect_not_implemented">Disconnect functionality not implemented yet</string>
+    
+    <!-- Connection status messages -->
+    <string name="connecting_to_device">Connecting to %1$s...</string>
+    <string name="connected_to_device">Connected to %1$s</string>
+    <string name="disconnecting">Disconnecting...</string>
+    <string name="disconnected_from_device">Disconnected from device</string>
+    <string name="connection_failed">Connection failed: %1$s</string>
+    <string name="message_received">Received: %1$s</string>
+    <string name="message_sent">Sent: %1$s</string>
+    
+    <!-- Connection troubleshooting -->
+    <string name="connection_timeout">Connection timeout - make sure the server is running</string>
+    <string name="socket_closed">Socket closed - check if the server is accepting connections</string>
+    <string name="device_not_reachable">Device not reachable - ensure Bluetooth is enabled on both devices</string>
 </resources>

@@ -41,6 +41,35 @@
             android:textColor="@android:color/darker_gray"
             android:layout_marginTop="2dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <Button
+                android:id="@+id/button_pair_unpair"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Pair"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/button_connect"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Connect"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:layout_marginStart="4dp"
+                android:enabled="false" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
 </androidx.cardview.widget.CardView>

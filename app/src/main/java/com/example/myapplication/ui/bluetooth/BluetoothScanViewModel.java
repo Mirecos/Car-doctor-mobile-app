@@ -51,6 +51,62 @@ public class BluetoothScanViewModel extends ViewModel {
         devices.setValue(updatedDevices);
     }
     
+    public void updateDeviceStatus(String deviceAddress, boolean isPaired, boolean isConnected) {
+        List<BluetoothDeviceItem> currentDevices = devices.getValue();
+        if (currentDevices == null) {
+            return;
+        }
+        
+        List<BluetoothDeviceItem> updatedDevices = new ArrayList<>();
+        for (BluetoothDeviceItem deviceItem : currentDevices) {
+            if (deviceItem.getAddress().equals(deviceAddress)) {
+                deviceItem.setPaired(isPaired);
+                deviceItem.setConnected(isConnected);
+                // Also refresh the pairing status from the actual device to ensure consistency
+                deviceItem.refreshPairingStatus();
+            }
+            updatedDevices.add(deviceItem);
+        }
+        devices.setValue(updatedDevices);
+    }
+    
+    public void updateDeviceConnectionStatus(BluetoothDevice device, boolean isConnected) {
+        if (device == null || device.getAddress() == null) {
+            return;
+        }
+        
+        List<BluetoothDeviceItem> currentDevices = devices.getValue();
+        if (currentDevices == null) {
+            return;
+        }
+        
+        List<BluetoothDeviceItem> updatedDevices = new ArrayList<>();
+        for (BluetoothDeviceItem deviceItem : currentDevices) {
+            if (deviceItem.getAddress().equals(device.getAddress())) {
+                deviceItem.setConnected(isConnected);
+            } else if (isConnected) {
+                // If connecting to a new device, disconnect all others
+                deviceItem.setConnected(false);
+            }
+            updatedDevices.add(deviceItem);
+        }
+        devices.setValue(updatedDevices);
+    }
+    
+    public void updateAllDevicesDisconnected() {
+        List<BluetoothDeviceItem> currentDevices = devices.getValue();
+        if (currentDevices == null) {
+            return;
+        }
+        
+        List<BluetoothDeviceItem> updatedDevices = new ArrayList<>();
+        for (BluetoothDeviceItem deviceItem : currentDevices) {
+            deviceItem.setConnected(false);
+            updatedDevices.add(deviceItem);
+        }
+        devices.setValue(updatedDevices);
+    }
+    
     public void clearDevices() {
         devices.setValue(new ArrayList<>());
         deviceAddresses.clear();

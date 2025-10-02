@@ -13,6 +13,8 @@ public class BluetoothDeviceItem {
     private final String name;
     private final String address;
     private final int rssi;
+    private boolean isPaired;
+    private boolean isConnected;
     
     public BluetoothDeviceItem(BluetoothDevice device) {
         this.device = device;
@@ -39,6 +41,15 @@ public class BluetoothDeviceItem {
         
         this.name = deviceName;
         this.rssi = 0; // RSSI not available in basic discovery
+        
+        // Check if device is already paired
+        try {
+            this.isPaired = device.getBondState() == BluetoothDevice.BOND_BONDED;
+        } catch (SecurityException e) {
+            this.isPaired = false;
+        }
+        
+        this.isConnected = false; // Will be updated later based on connection status
     }
     
     public BluetoothDevice getDevice() {
@@ -55,6 +66,33 @@ public class BluetoothDeviceItem {
     
     public int getRssi() {
         return rssi;
+    }
+    
+    public boolean isPaired() {
+        return isPaired;
+    }
+    
+    public void setPaired(boolean paired) {
+        isPaired = paired;
+    }
+    
+    public boolean isConnected() {
+        return isConnected;
+    }
+    
+    public void setConnected(boolean connected) {
+        isConnected = connected;
+    }
+    
+    /**
+     * Refresh the pairing status from the actual BluetoothDevice
+     */
+    public void refreshPairingStatus() {
+        try {
+            this.isPaired = device.getBondState() == BluetoothDevice.BOND_BONDED;
+        } catch (SecurityException e) {
+            // If we can't check the bond state, keep the current status
+        }
     }
     
     public String getDeviceTypeString() {
@@ -78,11 +116,18 @@ public class BluetoothDeviceItem {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         BluetoothDeviceItem that = (BluetoothDeviceItem) obj;
-        return address != null ? address.equals(that.address) : that.address == null;
+        return (address != null ? address.equals(that.address) : that.address == null) &&
+               isPaired == that.isPaired &&
+               isConnected == that.isConnected &&
+               (name != null ? name.equals(that.name) : that.name == null);
     }
     
     @Override
     public int hashCode() {
-        return address != null ? address.hashCode() : 0;
+        int result = address != null ? address.hashCode() : 0;
+        result = 31 * result + (name != null ? name.hashCode() : 0);
+        result = 31 * result + (isPaired ? 1 : 0);
+        result = 31 * result + (isConnected ? 1 : 0);
+        return result;
     }
 }

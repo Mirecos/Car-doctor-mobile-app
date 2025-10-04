@@ -160,8 +160,8 @@ public class BluetoothConnectionService {
                     }
                 });
                 
-                // Start listening for incoming messages
-                listenForMessages();
+                // Start listening for incoming messages in a separate thread
+                startMessageListenerThread();
                 
             } catch (IOException e) {
                 Log.e(TAG, "Connection failed: " + e.getMessage());
@@ -178,61 +178,93 @@ public class BluetoothConnectionService {
     }
     
     /**
+     * Start the message listener thread
+     */
+    private void startMessageListenerThread() {
+        Thread messageListenerThread = new Thread(() -> {
+            Log.d(TAG, "Starting message listener thread");
+            listenForMessages();
+        });
+        messageListenerThread.setDaemon(true);
+        messageListenerThread.start();
+    }
+    
+    /**
      * Listen for incoming messages from the server
      */
     private void listenForMessages() {
         byte[] buffer = new byte[1024];
+        Log.d(TAG, "Message listener started, waiting for messages...");
         
         while (isConnected && socket != null && socket.isConnected()) {
             try {
+                Log.d(TAG, "Waiting to read message from input stream...");
                 int bytesRead = inputStream.read(buffer);
+                Log.d(TAG, "Read " + bytesRead + " bytes from input stream");
+                
                 if (bytesRead > 0) {
                     String message = new String(buffer, 0, bytesRead, "UTF-8").trim();
-                    Log.d(TAG, "Received message: " + message);
+                    Log.d(TAG, "Received message: '" + message + "'");
                     
                     // Notify message received on main thread
                     mainHandler.post(() -> {
+                        Log.d(TAG, "Posting message to main thread: " + message);
                         if (listener != null) {
                             listener.onMessageReceived(message);
+                        } else {
+                            Log.w(TAG, "Listener is null, cannot notify message received");
                         }
                     });
+                } else if (bytesRead == -1) {
+                    Log.d(TAG, "End of stream reached, connection closed by remote");
+                    break;
                 }
             } catch (IOException e) {
                 if (isConnected) {
-                    Log.e(TAG, "Error reading message: " + e.getMessage());
+                    Log.e(TAG, "Error reading message: " + e.getMessage(), e);
                     disconnect();
                 }
                 break;
             }
         }
+        Log.d(TAG, "Message listener thread ended");
     }
     
     /**
      * Send a message to the connected device
      */
     public void sendMessage(String message) {
+        Log.d(TAG, "sendMessage called with: '" + message + "'");
+        Log.d(TAG, "Connection status - isConnected: " + isConnected + ", outputStream: " + (outputStream != null));
+        
         if (!isConnected || outputStream == null) {
-            Log.w(TAG, "Cannot send message - not connected");
+            Log.w(TAG, "Cannot send message - not connected or no output stream");
             return;
         }
         
         new Thread(() -> {
             try {
+                Log.d(TAG, "Preparing to send message to output stream");
                 String messageWithNewline = message + "\n";
-                outputStream.write(messageWithNewline.getBytes("UTF-8"));
+                byte[] messageBytes = messageWithNewline.getBytes("UTF-8");
+                
+                Log.d(TAG, "Writing " + messageBytes.length + " bytes to output stream");
+                outputStream.write(messageBytes);
                 outputStream.flush();
                 
-                Log.d(TAG, "Sent message: " + message);
+                Log.d(TAG, "Successfully sent message: '" + message + "'");
                 
                 // Notify message sent on main thread
                 mainHandler.post(() -> {
                     if (listener != null) {
                         listener.onMessageSent(message);
+                    } else {
+                        Log.w(TAG, "Listener is null, cannot notify message sent");
                     }
                 });
                 
             } catch (IOException e) {
-                Log.e(TAG, "Error sending message: " + e.getMessage());
+                Log.e(TAG, "Error sending message: " + e.getMessage(), e);
                 disconnect();
             }
         }).start();

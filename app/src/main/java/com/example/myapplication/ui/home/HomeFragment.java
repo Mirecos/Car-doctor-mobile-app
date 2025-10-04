@@ -302,12 +302,9 @@ public class HomeFragment extends Fragment implements BluetoothDeviceAdapter.OnD
         String newLog = currentLog + "\n" + logEntry;
         binding.textMessageLog.setText(newLog);
         
-        // Scroll to bottom
-        binding.textMessageLog.post(() -> {
-            int scrollAmount = binding.textMessageLog.getLayout().getLineTop(binding.textMessageLog.getLineCount()) - binding.textMessageLog.getHeight();
-            if (scrollAmount > 0) {
-                binding.textMessageLog.scrollTo(0, scrollAmount);
-            }
+        // Scroll to bottom of the ScrollView
+        binding.scrollMessageLog.post(() -> {
+            binding.scrollMessageLog.fullScroll(android.view.View.FOCUS_DOWN);
         });
     }
     
@@ -347,8 +344,37 @@ public class HomeFragment extends Fragment implements BluetoothDeviceAdapter.OnD
     
     @Override
     public void onPairUnpairClick(BluetoothDeviceItem deviceItem) {
-        // Not implemented for home fragment - user can use Bluetooth fragment for pairing
-        Toast.makeText(getContext(), "Use Bluetooth tab to pair devices", Toast.LENGTH_SHORT).show();
+        if (!hasRequiredPermissions()) {
+            requestPermissions();
+            return;
+        }
+        
+        BluetoothDevice device = deviceItem.getDevice();
+        if (device == null) return;
+        
+        try {
+            if (deviceItem.isPaired()) {
+                // Unpair device using reflection
+                device.getClass().getMethod("removeBond").invoke(device);
+                String deviceName = getDeviceName(device);
+                Toast.makeText(getContext(), "Unpairing " + deviceName, Toast.LENGTH_SHORT).show();
+                appendToMessageLog("Unpairing " + deviceName);
+            } else {
+                // Pair device
+                boolean pairingStarted = device.createBond();
+                if (pairingStarted) {
+                    String deviceName = getDeviceName(device);
+                    Toast.makeText(getContext(), "Pairing with " + deviceName, Toast.LENGTH_SHORT).show();
+                    appendToMessageLog("Pairing with " + deviceName);
+                } else {
+                    Toast.makeText(getContext(), "Failed to start pairing", Toast.LENGTH_SHORT).show();
+                    appendToMessageLog("Failed to start pairing");
+                }
+            }
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "Pairing operation failed", Toast.LENGTH_SHORT).show();
+            appendToMessageLog("Pairing operation failed: " + e.getMessage());
+        }
     }
     
     @Override
